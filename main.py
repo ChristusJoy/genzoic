@@ -51,8 +51,6 @@ async def get_market_pulse(ticker: str):
         raise HTTPException(status_code=500, detail="Alpha Vantage API key not configured.")
     if not NEWS_API_KEY:
         raise HTTPException(status_code=500, detail="News API key not configured.")
-
-    # Placeholder for API calls. For now, we'll return mock data.
     
     
     async def fetch_price_momentum(ticker):
