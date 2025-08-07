@@ -7,8 +7,14 @@ import google.generativeai as genai
 import requests
 import json
 import datetime
+import time
+from datetime import datetime, timedelta
 
 load_dotenv()
+
+# Simple in-memory cache with a TTL of 15 minutes
+cache = {}
+CACHE_TTL_SECONDS = 15 * 60  # 15 minutes
 
 # Get API keys
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
@@ -21,7 +27,7 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 app = FastAPI()
 
 # Allow CORS for the frontend to access the API
-origins = ["http://localhost:3000"] # Replace with your frontend's URL
+origins = ["http://localhost:5173"] # Replace with your frontend's URL
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -34,6 +40,11 @@ app.add_middleware(
 async def get_market_pulse(ticker: str):
     if not ticker:
         raise HTTPException(status_code=400, detail="Ticker is required.")
+    
+    # Check if the ticker is in the cache and hasn't expired
+    cache_key = ticker.upper()
+    if cache_key in cache and datetime.now() - cache[cache_key]['timestamp'] < timedelta(seconds=CACHE_TTL_SECONDS):
+        return cache[cache_key]['data']
     
     # Validate API keys
     if not ALPHA_VANTAGE_API_KEY:
@@ -239,12 +250,19 @@ async def get_market_pulse(ticker: str):
         pulse = "neutral"
         explanation = "Error generating a market pulse due to an issue with the AI service."
 
-    # Return the full, dynamic response
-    return {
+    # After getting a successful response from Gemini, store it in the cache
+    response_data = {
         "ticker": ticker.upper(),
-        "as_of": datetime.datetime.now().strftime("%Y-%m-%d"),
+        "as_of": datetime.now().strftime("%Y-%m-%d"),
         "momentum": { "returns": momentum_returns, "score": momentum_score },
         "news": news_data,
         "pulse": pulse,
         "llm_explanation": explanation
     }
+
+    cache[cache_key] = {
+        'timestamp': datetime.now(),
+        'data': response_data
+    }
+
+    return response_data
